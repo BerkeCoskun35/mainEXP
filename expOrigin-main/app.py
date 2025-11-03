@@ -117,9 +117,10 @@ def ensure_tables():
         """))
 
         # reports missing columns (idempotent)
-        conn.execute(text("ALTER TABLE IF NOT EXISTS reports ADD COLUMN IF NOT EXISTS details    TEXT"))
-        conn.execute(text("ALTER TABLE IF NOT EXISTS reports ADD COLUMN IF NOT EXISTS witnesses  TEXT"))
-        conn.execute(text("ALTER TABLE IF NOT EXISTS reports ADD COLUMN IF NOT EXISTS department VARCHAR(50)"))
+        conn.execute(text("ALTER TABLE reports ADD COLUMN IF NOT EXISTS details TEXT"))
+        conn.execute(text("ALTER TABLE reports ADD COLUMN IF NOT EXISTS witnesses TEXT"))
+        conn.execute(text("ALTER TABLE reports ADD COLUMN IF NOT EXISTS department VARCHAR(50)"))
+
 
 def seed_default_categories():
     """
@@ -235,6 +236,12 @@ def risk_bildir():
 @app.route("/olay-bildir")
 def olay_bildir():
     return render_template("eventreport.html", active_page="event")
+
+@app.route("/raporlar")
+@admin_required
+def raporlar():
+    return render_template("reports.html", active_page="reports")
+
 
 # -----------------------------------------------------
 # Precautions
