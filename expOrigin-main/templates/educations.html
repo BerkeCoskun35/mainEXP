@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Güvenlik Yönetim Sistemi</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</head>
+<body>
+    <!-- Navbar -->
+    {% include '_navbar.html' %}
+
+    <!-- Ana İçerik -->
+    <main class="main-content">
+        <div class="hero-section">
+            
+        </div>
+    </main>
+
+    <!-- Admin Bildirim Penceresi -->
+    {% if session.user_id %}
+    <div id="notification-container" class="notification-container" style="display: none;">
+        <div class="notification-modal">
+            <div class="notification-header">
+                <div class="notification-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z" fill="#FF6B6B"/>
+                    </svg>
+                </div>
+                <h3 class="notification-title">Yeni Acil Yardım Sinyali!</h3>
+                <button class="notification-close" onclick="closeNotification()">×</button>
+            </div>
+            <div class="notification-content">
+                <div class="notification-item">
+                    <span class="notification-label">Rapor Türü:</span>
+                    <span class="notification-value" id="report-type"></span>
+                </div>
+                <div class="notification-item">
+                    <span class="notification-label">Raporu Gönderen:</span>
+                    <span class="notification-value" id="reporter-name"></span>
+                </div>
+                <div class="notification-item">
+                    <span class="notification-label">Tarih:</span>
+                    <span class="notification-value" id="report-date"></span>
+                </div>
+            </div>
+            <div class="notification-actions">
+                <button class="notification-btn primary" onclick="viewReport()">Raporu Görüntüle</button>
+                <button class="notification-btn secondary" onclick="closeNotification()">Kapat</button>
+            </div>
+        </div>
+    </div>
+
+    {% if session.is_admin %}
+    <!-- Debug Butonu (Sadece admin için) -->
+    <div class="debug-btn" onclick="debugReports()" title="Debug Raporları">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="white"/>
+            <path d="M2 17L12 22L22 17" fill="white"/>
+            <path d="M2 12L12 17L22 12" fill="white"/>
+        </svg>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <script>
+        // Mobile menü toggle
+        const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+        const navMenu = document.querySelector('.nav-menu');
+        if (mobileMenuBtn && navMenu) {
+            mobileMenuBtn.addEventListener('click', () => {
+                navMenu.classList.toggle('active');
+            });
+        }
+        // Shared navbar and admin notifications
+        SharedUI.initNavbarUI();
+        SharedUI.maybeInitAdminNotifications();
+        // Profil butonu SharedUI tarafından global olarak yönetiliyor
+    </script>
+</body>
+</html> 

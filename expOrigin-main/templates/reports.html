@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Güvenlik Yönetim Sistemi</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <style>
+        /* Filters modern look */
+        .reports-filters { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.04); }
+        .reports-filters input,
+        .reports-filters select { transition: box-shadow .18s ease, border-color .18s ease; }
+        .reports-filters input:focus,
+        .reports-filters select:focus { outline: none; border-color: #93c5fd; box-shadow: 0 0 0 4px rgba(59,130,246,.15); }
+        .btn-primary { background: #2563eb; border: none; color: #fff; padding: 10px 14px; border-radius: 10px; cursor: pointer; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-secondary { background: #f3f4f6; color: #111827; border: 1px solid #e5e7eb; padding: 10px 14px; border-radius: 10px; cursor: pointer; }
+
+        /* Card enter animation */
+        .report-card { opacity: 0; transform: translateY(8px); transition: opacity .22s ease, transform .22s ease; }
+        .report-card.appear { opacity: 1; transform: translateY(0); }
+
+        /* Skeletons */
+        .skeleton { background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 37%, #f3f4f6 63%); background-size: 400% 100%; animation: shimmer 1.2s infinite; border-radius: 14px; height: 180px; }
+        @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    {% include '_navbar.html' %}
+
+    <!-- Ana İçerik -->
+    <main class="main-content">
+        <div id="js-config"
+             data-auth="{% if session.user_id %}1{% else %}0{% endif %}"
+             data-profile-url="{{ url_for('profile') }}"
+             data-login-url="{{ url_for('login') }}"
+             data-reports-url="{{ url_for('raporlar') }}"></div>
+        <section class="reports-section">
+            <div class="reports-header">
+                <h1 class="reports-title">Raporlar</h1>
+                <p class="reports-subtitle">Tüm raporlar en yeniden eskiye listelenir. Aşağı kaydıkça daha fazlası yüklenir.</p>
+            </div>
+
+            <div class="reports-filters" style="margin-top:12px; margin-bottom:5px; display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:10px; align-items:end;">
+                <div>
+                    <label for="filterName" style="display:block;font-size:12px;color:#6b7280;">İsme göre</label>
+                    <input id="filterName" type="text" placeholder="Ad Soyad" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:10px;">
+                </div>
+                <div>
+                    <label for="filterType" style="display:block;font-size:12px;color:#6b7280;">Rapor türü</label>
+                    <select id="filterType" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:10px;">
+                        <option value="">Hepsi</option>
+                        <option>Risk Bildirim Raporlaması</option>
+                        <option>Olay Bildirim Raporlaması</option>
+                        <option>Acil Yardım Sinyali</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="filterDate" style="display:block;font-size:12px;color:#6b7280;">Tarih</label>
+                    <input id="filterDate" type="date" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:10px;">
+                </div>
+                <div style="display:flex; gap:8px; justify-content:flex-end;">
+                    <button id="filterClear" class="btn-secondary" type="button">Temizle</button>
+                    <button id="filterApply" class="btn-primary" type="button">Uygula</button>
+                </div>
+            </div>
+
+            <div id="reports-grid" class="reports-grid"></div>
+            <div id="reports-loader" class="reports-loader" style="display:none;">
+                <div class="spinner"></div>
+                <span>Daha fazla rapor yükleniyor...</span>
+            </div>
+            <div id="reports-end" class="reports-end" style="display:none;">Tüm raporlar yüklendi.</div>
+            <div id="reports-loader" class="reports-loader" style="display:none;">
+                <div class="spinner"></div>
+                <span>Daha fazla rapor yükleniyor...</span>
+            </div>
+            <div id="reports-end" class="reports-end" style="display:none;">Tüm raporlar yüklendi.</div>
+        </section>
+    </main>
+
+    <!-- Rapor Detay Modalı (reports-section DIŞINDA) -->
+    <div id="report-detail-backdrop" class="report-detail-backdrop" style="display:none;"></div>
+    <div id="report-detail-modal" class="report-detail-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="reportDetailTitle">
+        <div class="report-detail-header">
+            <h3 id="reportDetailTitle">Rapor Detayı</h3>
+            <button id="reportDetailClose" class="report-detail-close" aria-label="Kapat">×</button>
+        </div>
+        <div class="report-detail-content">
+            <div class="detail-row">
+                <span class="detail-label">Tür</span>
+                <span class="detail-value" id="detailType"></span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Tarih</span>
+                <span class="detail-value" id="detailDate"></span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Gönderen</span>
+                <span class="detail-value" id="detailReporter"></span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Detay</span>
+                <span class="detail-value" id="detailText"></span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Tanıklar</span>
+                <span class="detail-value" id="detailWitnesses"></span>
+            </div>
+        </div>
+        <div class="report-detail-actions">
+            <button id="reportDetailOk" class="notification-btn primary">Kapat</button>
+        </div>
+    </div>
+
+    <!-- Admin Bildirim Penceresi -->
+    {% if session.user_id %}
+    <div id="notification-container" class="notification-container" style="display: none;">
+        <div class="notification-modal">
+            <div class="notification-header">
+                <div class="notification-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z" fill="#FF6B6B"/>
+                    </svg>
+                </div>
+                <h3 class="notification-title">Yeni Acil Yardım Sinyali!</h3>
+                <button class="notification-close" onclick="closeNotification()">×</button>
+            </div>
+            <div class="notification-content">
+                <div class="notification-item">
+                    <span class="notification-label">Rapor Türü:</span>
+                    <span class="notification-value" id="report-type"></span>
+                </div>
+                <div class="notification-item">
+                    <span class="notification-label">Raporu Gönderen:</span>
+                    <span class="notification-value" id="reporter-name"></span>
+                </div>
+                <div class="notification-item">
+                    <span class="notification-label">Tarih:</span>
+                    <span class="notification-value" id="report-date"></span>
+                </div>
+            </div>
+            <div class="notification-actions">
+                <button class="notification-btn primary" onclick="viewReport()">Raporu Görüntüle</button>
+                <button class="notification-btn secondary" onclick="closeNotification()">Kapat</button>
+            </div>
+        </div>
+    </div>
+
+    {% if session.is_admin %}
+    <!-- Debug Butonu (Sadece admin için) -->
+    <div class="debug-btn" onclick="debugReports()" title="Debug Raporları">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="white"/>
+            <path d="M2 17L12 22L22 17" fill="white"/>
+            <path d="M2 12L12 17L22 12" fill="white"/>
+        </svg>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <script>
+        // Shared UI (no auto scroll background unless data-scroll-bg is present)
+        SharedUI.initNavbarUI();
+
+        // Global config from DOM (no template syntax inside JS)
+        const CONFIG_EL = document.getElementById('js-config');
+        const IS_AUTH = CONFIG_EL?.dataset.auth === '1';
+        const PROFILE_URL = CONFIG_EL?.dataset.profileUrl || '/profile';
+        const LOGIN_URL = CONFIG_EL?.dataset.loginUrl || '/login';
+        const REPORTS_URL = CONFIG_EL?.dataset.reportsUrl || '/raporlar';
+
+        // Profile buton tıklama işlemi
+        function handleProfileClick() {
+            window.location.href = IS_AUTH ? PROFILE_URL : LOGIN_URL;
+        }
+
+        // Raporlar - sonsuz kaydırma
+        const reportsGrid = document.getElementById('reports-grid');
+        const loader = document.getElementById('reports-loader');
+        const endMarker = document.getElementById('reports-end');
+        let loading = false;
+        let hasMore = true;
+        let nextOffset = 0;
+        const pageSize = 24; // grid için ideal
+        // active filters
+        let activeFilters = { q: '', type: '', date_from: '', date_to: '' };
+
+        function formatDate(iso) {
+            try {
+                return new Date(iso).toLocaleString('tr-TR');
+            } catch { return iso || ''; }
+        }
+
+        function createReportCard(item) {
+            const div = document.createElement('div');
+            div.className = 'report-card';
+            div.innerHTML = `
+                <div class="report-card__top">
+                    <span class="report-card__badge">${item.type || 'Rapor'}</span>
+                    <span class="report-card__date">${formatDate(item.date)}</span>
+                </div>
+                <div class="report-card__body">
+                    <h3 class="report-card__title">${item.reporter_name || item.fullname || 'Bilinmeyen Kullanıcı'}</h3>
+                    <p class="report-card__meta">Kullanıcı ID: ${(item.user_id !== undefined && item.user_id !== null) ? item.user_id : ''}</p>
+                    ${item.details ? `<div class="report-card__details">${formatReportCardDetails(item.details)}</div>` : ''}
+                    ${item.witnesses && item.witnesses.trim().length > 0 ? 
+                        `<p class="report-card__witnesses">👥 Tanık: ${item.witnesses}</p>` : 
+                        '<p class="report-card__witnesses no-witnesses">👥 Tanık: Yok</p>'
+                    }
+                    <div class="report-card__actions">
+                        <button class="view-report-btn" type="button">Raporu Görüntüle</button>
+                    </div>
+                </div>
+            `;
+            // Attach details payload to element
+            div.dataset.type = item.type || '';
+            div.dataset.date = item.date || '';
+            div.dataset.reporter = item.reporter_name || item.fullname || '';
+            div.dataset.details = item.details || '';
+            div.dataset.witnesses = item.witnesses || '';
+            // Button handler
+            const btn = div.querySelector('.view-report-btn');
+            btn.addEventListener('click', () => openReportDetail(div.dataset));
+            // smooth appear
+            requestAnimationFrame(() => div.classList.add('appear'));
+            return div;
+        }
+
+        async function loadReports() {
+            if (loading || !hasMore) return;
+            loading = true;
+            loader.style.display = 'flex';
+            try {
+                // show skeletons on first page load or when filters applied
+                const showSkeletons = nextOffset === 0;
+                let skeletons = [];
+                if (showSkeletons) {
+                    for (let i = 0; i < 8; i++) {
+                        const sk = document.createElement('div');
+                        sk.className = 'skeleton';
+                        reportsGrid.appendChild(sk);
+                        skeletons.push(sk);
+                    }
+                }
+                const params = new URLSearchParams();
+                params.set('limit', pageSize);
+                params.set('offset', nextOffset);
+                if (activeFilters.q) params.set('q', activeFilters.q);
+                if (activeFilters.type) params.set('type', activeFilters.type);
+                if (activeFilters.date_from) params.set('date_from', activeFilters.date_from);
+                if (activeFilters.date_to) params.set('date_to', activeFilters.date_to);
+                const resp = await fetch(`/api/reports?${params.toString()}`);
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.message || 'Yükleme hatası');
+                // remove skeletons and inject cards with appear animation staggered
+                skeletons.forEach(el => el.remove());
+                data.items.forEach((item, idx) => {
+                    const card = createReportCard(item);
+                    if (showSkeletons) card.style.transitionDelay = `${Math.min(idx * 20, 200)}ms`;
+                    reportsGrid.appendChild(card);
+                });
+                hasMore = data.has_more;
+                nextOffset = data.next_offset;
+                if (!hasMore) endMarker.style.display = 'block';
+            } catch (e) {
+                console.error(e);
+            } finally {
+                loader.style.display = 'none';
+                loading = false;
+            }
+        }
+
+        // IntersectionObserver ile sonsuz kaydırma
+        const sentinel = document.createElement('div');
+        sentinel.id = 'sentinel';
+        reportsGrid.after(sentinel);
+        const io = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) loadReports();
+            });
+        }, { rootMargin: '600px 0px' });
+        io.observe(sentinel);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // bind filters
+            const nameEl = document.getElementById('filterName');
+            const typeEl = document.getElementById('filterType');
+            const dateEl = document.getElementById('filterDate');
+            const applyBtn = document.getElementById('filterApply');
+            const clearBtn = document.getElementById('filterClear');
+
+            function resetAndReload() {
+                // reset list
+                reportsGrid.innerHTML = '';
+                nextOffset = 0;
+                hasMore = true;
+                endMarker.style.display = 'none';
+                loadReports();
+            }
+
+            applyBtn?.addEventListener('click', () => {
+                activeFilters = {
+                    q: nameEl.value.trim(),
+                    type: typeEl.value.trim(),
+                    date_from: dateEl.value ? (dateEl.value + ' 00:00:00') : '',
+                    date_to: dateEl.value ? (dateEl.value + ' 23:59:59') : ''
+                };
+                resetAndReload();
+            });
+            clearBtn?.addEventListener('click', () => {
+                nameEl.value = '';
+                typeEl.value = '';
+                dateEl.value = '';
+                activeFilters = { q: '', type: '', date_from: '', date_to: '' };
+                resetAndReload();
+            });
+
+            loadReports();
+            bindReportDetailModal();
+        });
+
+        // Rapor Detay Modal mantığı
+        function bindReportDetailModal() {
+            const modal = document.getElementById('report-detail-modal');
+            const backdrop = document.getElementById('report-detail-backdrop');
+            const closeBtn = document.getElementById('reportDetailClose');
+            const okBtn = document.getElementById('reportDetailOk');
+            const close = () => {
+                modal.style.display = 'none';
+                backdrop.style.display = 'none';
+                document.body.classList.remove('report-detail-open');
+            };
+            closeBtn.addEventListener('click', close);
+            okBtn.addEventListener('click', close);
+            backdrop.addEventListener('click', close);
+            window.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+        }
+
+        function openReportDetail(data) {
+            const modal = document.getElementById('report-detail-modal');
+            const backdrop = document.getElementById('report-detail-backdrop');
+            document.getElementById('detailType').textContent = data.type || '—';
+            document.getElementById('detailDate').textContent = formatDate(data.date);
+            document.getElementById('detailReporter').textContent = data.reporter || '—';
+            
+            // Detay metnini formatla - departman ve türleri bold yap
+            const detailEl = document.getElementById('detailText');
+            if (data.details && data.details.trim().length > 0) {
+                // Detay metnini parse et ve formatla
+                const formattedDetails = formatReportDetails(data.details);
+                detailEl.innerHTML = formattedDetails;
+            } else {
+                detailEl.textContent = 'Bu rapora ait detay verilmemiş';
+            }
+            
+            // Tanık bilgisini göster
+            const witnessesEl = document.getElementById('detailWitnesses');
+            if (data.witnesses && data.witnesses.trim().length > 0) {
+                witnessesEl.textContent = data.witnesses;
+            } else {
+                witnessesEl.textContent = 'Bu rapor için tanık girişi yapılmamış';
+            }
+            
+            modal.style.display = 'block';
+            backdrop.style.display = 'block';
+            document.body.classList.add('report-detail-open');
+        }
+
+        // Detay metnini formatla - departman ve türleri bold yap (modal için)
+        function formatReportDetails(details) {
+            if (!details) return '';
+            
+            // Risk raporları için: "Departman: A | Risk Türleri: Elektrik kaçağı, Paslı keskin metaller | Detaylar: [detaylar]"
+            if (details.includes('Departman:') && details.includes('Risk Türleri:')) {
+                const parts = details.split(' | ');
+                let formatted = '';
+                
+                parts.forEach((part, index) => {
+                    if (part.startsWith('Departman:')) {
+                        const dept = part.replace('Departman:', '').trim();
+                        formatted += `<div class="detail-line"><strong>Departman:</strong> ${dept}</div>`;
+                    } else if (part.startsWith('Risk Türleri:')) {
+                        const types = part.replace('Risk Türleri:', '').trim();
+                        formatted += `<div class="detail-line"><strong>Risk Türleri:</strong> ${types}</div>`;
+                    } else if (part.startsWith('Detaylar:')) {
+                        const detailText = part.replace('Detaylar:', '').trim();
+                        formatted += `<div class="detail-line detail-text">${detailText}</div>`;
+                    }
+                });
+                
+                return formatted;
+            }
+            
+            // Olay raporları için: "Departman: B | Olay Türleri: Kaza, Yangın | Yer: [yer] | Detaylar: [detaylar]"
+            if (details.includes('Departman:') && details.includes('Olay Türleri:')) {
+                const parts = details.split(' | ');
+                let formatted = '';
+                
+                parts.forEach((part, index) => {
+                    if (part.startsWith('Departman:')) {
+                        const dept = part.replace('Departman:', '').trim();
+                        formatted += `<div class="detail-line"><strong>Departman:</strong> ${dept}</div>`;
+                    } else if (part.startsWith('Olay Türleri:')) {
+                        const types = part.replace('Olay Türleri:', '').trim();
+                        formatted += `<div class="detail-line"><strong>Olay Türleri:</strong> ${types}</div>`;
+                    } else if (part.startsWith('Yer:')) {
+                        const location = part.replace('Yer:', '').trim();
+                        formatted += `<div class="detail-line"><strong>Yer:</strong> ${location}</div>`;
+                    } else if (part.startsWith('Detaylar:')) {
+                        const detailText = part.replace('Detaylar:', '').trim();
+                        formatted += `<div class="detail-line detail-text">${detailText}</div>`;
+                    }
+                });
+                
+                return formatted;
+            }
+            
+            // Diğer rapor türleri için basit format
+            return `<div class="detail-line">${details}</div>`;
+        }
+
+        // Detay metnini formatla - kartlar için kısa format
+        function formatReportCardDetails(details) {
+            if (!details) return '';
+            
+            // Risk raporları için: "Departman: A | Risk Türleri: Elektrik kaçağı, Paslı keskin metaller | Detaylar: [detaylar]"
+            if (details.includes('Departman:') && details.includes('Risk Türleri:')) {
+                const parts = details.split(' | ');
+                let formatted = '';
+                
+                parts.forEach((part, index) => {
+                    if (part.startsWith('Departman:')) {
+                        const dept = part.replace('Departman:', '').trim();
+                        formatted += `<span class="card-detail-item"><strong>Departman:</strong> ${dept}</span>`;
+                    } else if (part.startsWith('Risk Türleri:')) {
+                        const types = part.replace('Risk Türleri:', '').trim();
+                        formatted += `<span class="card-detail-item"><strong>Risk Türleri:</strong> ${types}</span>`;
+                    }
+                });
+                
+                return formatted;
+            }
+            
+            // Olay raporları için: "Departman: B | Olay Türleri: Kaza, Yangın | Yer: [yer] | Detaylar: [detaylar]"
+            if (details.includes('Departman:') && details.includes('Olay Türleri:')) {
+                const parts = details.split(' | ');
+                let formatted = '';
+                
+                parts.forEach((part, index) => {
+                    if (part.startsWith('Departman:')) {
+                        const dept = part.replace('Departman:', '').trim();
+                        formatted += `<span class="card-detail-item"><strong>Departman:</strong> ${dept}</span>`;
+                    } else if (part.startsWith('Olay Türleri:')) {
+                        const types = part.replace('Olay Türleri:', '').trim();
+                        formatted += `<span class="card-detail-item"><strong>Olay Türleri:</strong> ${types}</span>`;
+                    } else if (part.startsWith('Yer:')) {
+                        const location = part.replace('Yer:', '').trim();
+                        formatted += `<span class="card-detail-item"><strong>Yer:</strong> ${location}</span>`;
+                    }
+                });
+                
+                return formatted;
+            }
+            
+            // Diğer rapor türleri için basit format
+            return `<span class="card-detail-item">${details}</span>`;
+        }
+
+        // Admin bildirim sistemi
+        let notificationCheckInterval;
+        let lastCheckTime = new Date();
+
+        function closeNotification() {
+            const container = document.getElementById('notification-container');
+            container.style.display = 'none';
+        }
+
+        function viewReport() {
+            window.location.href = REPORTS_URL;
+        }
+
+        function checkNewReports() {
+            fetch('/check-new-reports')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.count > 0) {
+                        const latestReport = data.new_reports[0];
+                        showNotification(latestReport);
+                    }
+                })
+                .catch(error => {
+                    console.error('Rapor kontrolü hatası:', error);
+                });
+        }
+
+        function showNotification(report) {
+            document.getElementById('report-type').textContent = report.type;
+            document.getElementById('reporter-name').textContent = report.reporter_name;
+            document.getElementById('report-date').textContent = new Date(report.date).toLocaleString('tr-TR');
+            const container = document.getElementById('notification-container');
+            container.style.display = 'flex';
+            playNotificationSound();
+        }
+
+        function playNotificationSound() {
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT');
+                audio.play();
+            } catch (e) {
+                console.log('Ses çalınamadı:', e);
+            }
+        }
+
+        function initAdminNotifications() {
+            notificationCheckInterval = setInterval(checkNewReports, 10000);
+            checkNewReports();
+        }
+
+        function debugReports() {
+            fetch('/debug-reports')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('=== DEBUG RAPORLARI ===');
+                        console.log('Mevcut Zaman:', data.current_time);
+                        console.log('Toplam Rapor:', data.total_reports);
+                        console.log('Yeni Rapor Sayısı:', data.new_reports_count);
+                        console.log('Tüm Raporlar:', data.all_reports);
+                        console.log('Yeni Raporlar:', data.new_reports);
+                        alert(`Debug Bilgileri:\nToplam Rapor: ${data.total_reports}\nYeni Rapor: ${data.new_reports_count}\nDetaylar için konsolu kontrol edin.`);
+                    } else {
+                        alert('Debug hatası: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Debug hatası:', error);
+                    alert('Debug hatası: ' + error.message);
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (IS_AUTH) {
+                fetch('/check-admin-status')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.is_admin) {
+                            initAdminNotifications();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Admin kontrolü hatası:', error);
+                    });
+            }
+        });
+
+        window.addEventListener('beforeunload', function() {
+            if (notificationCheckInterval) {
+                clearInterval(notificationCheckInterval);
+            }
+        });
+    
+    </script>
+</body>
+</html> 

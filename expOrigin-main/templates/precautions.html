@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Güvenlik Yönetim Sistemi</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</head>
+<body>
+    <!-- Navbar -->
+    {% include '_navbar.html' %}
+
+    <!-- Ana İçerik -->
+    <main class="main-content">
+        <div class="hero-section">
+            <h1 class="hero-title">Alınacak Önlemler</h1>
+            <p class="hero-subtitle">İş sağlığı ve güvenliği için alınması gereken temel önlemler</p>
+            
+            {% if session.is_admin %}
+            <div class="admin-actions" style="margin-top: 20px; text-align: center;">
+                <button class="add-precautions-btn" onclick="openAddPrecautionsModal()">
+                    <img src="{{ url_for('static', filename='images/addPrecautions.png') }}" alt="Ekle">
+                    Yeni Önlem Ekle
+                </button>
+                <button class="delete-precautions-btn" onclick="deleteSelectedPrecautions()" style="display: none;">
+                    <img src="{{ url_for('static', filename='images/deletePrecautions.png') }}" alt="Sil">
+                    Seçilenleri Sil
+                </button>
+            </div>
+            {% endif %}
+            
+            <div class="precautions-grid">
+                {% if precautions %}
+                    {% for precaution in precautions %}
+                        <div class="precaution-item {% if loop.index % 2 == 0 %}right{% else %}left{% endif %} {% if session.is_admin %}clickable{% endif %}" 
+                             data-precaution-id="{{ precaution[0] }}" 
+                             {% if session.is_admin %}onclick="togglePrecauctionSelection(this)"{% endif %}>
+                            <div class="precaution-number">{{ loop.index }}</div>
+                            <div class="precaution-content">
+                                <h3>{{ precaution[1] }}</h3>
+                                <p>{{ precaution[2] }}</p>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="precaution-item left">
+                        <div class="precaution-number">1</div>
+                        <div class="precaution-content">
+                            <h3>Veri Bulunamadı</h3>
+                            <p>Önlem verileri yüklenemedi. Lütfen daha sonra tekrar deneyin.</p>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </main>
+    
+    <!-- Admin Bildirim Penceresi -->
+    {% if session.user_id %}
+    <div id="notification-container" class="notification-container" style="display: none;">
+        <div class="notification-modal">
+            <div class="notification-header">
+                <div class="notification-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z" fill="#FF6B6B"/>
+                    </svg>
+                </div>
+                <h3 class="notification-title">Yeni Acil Yardım Sinyali!</h3>
+                <button class="notification-close" onclick="closeNotification()">×</button>
+            </div>
+            <div class="notification-content">
+                <div class="notification-item">
+                    <span class="notification-label">Rapor Türü:</span>
+                    <span class="notification-value" id="report-type"></span>
+                </div>
+                <div class="notification-item">
+                    <span class="notification-label">Raporu Gönderen:</span>
+                    <span class="notification-value" id="reporter-name"></span>
+                </div>
+                <div class="notification-item">
+                    <span class="notification-label">Tarih:</span>
+                    <span class="notification-value" id="report-date"></span>
+                </div>
+            </div>
+            <div class="notification-actions">
+                <button class="notification-btn primary" onclick="viewReport()">Raporu Görüntüle</button>
+                <button class="notification-btn secondary" onclick="closeNotification()">Kapat</button>
+            </div>
+        </div>
+    </div>
+
+    {% if session.is_admin %}
+    <!-- Debug Butonu (Sadece admin için) -->
+    <div class="debug-btn" onclick="debugReports()" title="Debug Raporları">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="white"/>
+            <path d="M2 17L12 22L22 17" fill="white"/>
+            <path d="M2 12L12 17L22 12" fill="white"/>
+        </svg>
+    </div>
+    {% endif %}
+    {% endif %}
+    
+    <!-- Önlem Ekleme Modal -->
+    {% if session.is_admin %}
+    <div id="addPrecautionsModal" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Yeni Önlem Ekle</h3>
+                <button class="modal-close" onclick="closeAddPrecautionsModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="addPrecautionsForm">
+                    <div class="form-group">
+                        <label for="modalTitle">Başlık <span class="required">*</span></label>
+                        <input type="text" id="modalTitle" name="title" required maxlength="200" placeholder="Önlem başlığını girin">
+                        <div class="character-count">
+                            <span id="modalTitleCount">0</span>/200
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="modalExplanation">Açıklama <span class="required">*</span></label>
+                        <textarea id="modalExplanation" name="explanation" required maxlength="1000" placeholder="Önlem açıklamasını detaylı şekilde girin"></textarea>
+                        <div class="character-count">
+                            <span id="modalExplanationCount">0</span>/1000
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-primary" onclick="submitPrecautionsForm()">
+                    <img src="{{ url_for('static', filename='images/addPrecautions.png') }}" alt="Ekle" style="width: 18px; height: 18px; margin-right: 8px;">
+                    Önlem Ekle
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddPrecautionsModal()">İptal</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <script>
+        // Mobile menü toggle
+        const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+        const navMenu = document.querySelector('.nav-menu');
+
+        mobileMenuBtn.addEventListener('click', () => {
+            navMenu.classList.toggle('active');
+        });
+
+        // Shared navbar init (no auto scroll bg unless data-scroll-bg is present)
+        SharedUI.initNavbarUI();
+
+        // Smooth scroll için
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+
+        // Profile buton tıklama işlemi
+        function handleProfileClick() {
+            fetch('/check-admin-status')
+                .then(r => r.json())
+                .then(() => { window.location.href = "{{ url_for('profile') }}"; })
+                .catch(() => { window.location.href = "{{ url_for('login') }}"; });
+        }
+
+
+
+        // Admin bildirim sistemi
+        let notificationCheckInterval;
+        let lastCheckTime = new Date();
+
+        // Bildirim penceresini kapat
+        function closeNotification() {
+            const container = document.getElementById('notification-container');
+            container.style.display = 'none';
+        }
+
+        // Raporu görüntüle
+        function viewReport() { window.location.href = "{{ url_for('raporlar') }}"; }
+
+        // Yeni raporları kontrol et
+        function checkNewReports() {
+            fetch('/check-new-reports')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.count > 0) {
+                        // Yeni raporlar varsa bildirim göster
+                        const latestReport = data.new_reports[0];
+                        showNotification(latestReport);
+                    }
+                })
+                .catch(error => {
+                    console.error('Rapor kontrolü hatası:', error);
+                });
+        }
+
+        // Bildirim penceresini göster
+        function showNotification(report) {
+            document.getElementById('report-type').textContent = report.type;
+            document.getElementById('reporter-name').textContent = report.reporter_name;
+            document.getElementById('report-date').textContent = new Date(report.date).toLocaleString('tr-TR');
+            
+            const container = document.getElementById('notification-container');
+            container.style.display = 'flex';
+            
+            // Ses efekti (opsiyonel)
+            playNotificationSound();
+        }
+
+        // Bildirim sesi çal
+        function playNotificationSound() {
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT');
+                audio.play();
+            } catch (e) {
+                console.log('Ses çalınamadı:', e);
+            }
+        }
+
+        // Admin kontrolü ve bildirim sistemi başlat
+        function initAdminNotifications() {
+            // Her 10 saniyede bir yeni raporları kontrol et
+            notificationCheckInterval = setInterval(checkNewReports, 10000);
+            
+            // İlk kontrolü hemen yap
+            checkNewReports();
+        }
+
+        // Debug raporları
+        function debugReports() {
+            fetch('/debug-reports')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('=== DEBUG RAPORLARI ===');
+                        console.log('Mevcut Zaman:', data.current_time);
+                        console.log('Toplam Rapor:', data.total_reports);
+                        console.log('Yeni Rapor Sayısı:', data.new_reports_count);
+                        console.log('Tüm Raporlar:', data.all_reports);
+                        console.log('Yeni Raporlar:', data.new_reports);
+                        
+                        alert(`Debug Bilgileri:\nToplam Rapor: ${data.total_reports}\nYeni Rapor: ${data.new_reports_count}\nDetaylar için konsolu kontrol edin.`);
+                    } else {
+                        alert('Debug hatası: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Debug hatası:', error);
+                    alert('Debug hatası: ' + error.message);
+                });
+        }
+
+        // Sayfa yüklendiğinde admin bildirim sistemini başlat
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/check-admin-status')
+                .then(response => response.json())
+                .then(data => { if (data.is_admin) initAdminNotifications(); })
+                .catch(error => console.error('Admin kontrolü hatası:', error));
+        });
+
+        // Sayfa kapatılırken interval'i temizle
+        window.addEventListener('beforeunload', function() {
+            if (notificationCheckInterval) {
+                clearInterval(notificationCheckInterval);
+            }
+        });
+
+        // Önlem ekleme modal fonksiyonları
+        function openAddPrecautionsModal() {
+            const modal = document.getElementById('addPrecautionsModal');
+            modal.style.display = 'flex';
+            setTimeout(() => {
+                modal.querySelector('.modal').classList.add('open');
+            }, 10);
+        }
+
+        function closeAddPrecautionsModal() {
+            const modal = document.getElementById('addPrecautionsModal');
+            modal.querySelector('.modal').classList.remove('open');
+            setTimeout(() => {
+                modal.style.display = 'none';
+                // Formu temizle
+                document.getElementById('addPrecautionsForm').reset();
+                document.getElementById('modalTitleCount').textContent = '0';
+                document.getElementById('modalExplanationCount').textContent = '0';
+            }, 180);
+        }
+
+        // Modal dışına tıklayınca kapat
+        document.getElementById('addPrecautionsModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddPrecautionsModal();
+            }
+        });
+
+        // Karakter sayacı
+        function updateCharCount(inputId, countId, maxLength) {
+            const input = document.getElementById(inputId);
+            const count = document.getElementById(countId);
+            
+            input.addEventListener('input', function() {
+                const currentLength = this.value.length;
+                count.textContent = currentLength;
+                
+                if (currentLength > maxLength * 0.9) {
+                    count.style.color = '#e74c3c';
+                } else if (currentLength > maxLength * 0.7) {
+                    count.style.color = '#f39c12';
+                } else {
+                    count.style.color = '#6c757d';
+                }
+            });
+        }
+
+        // Karakter sayaçlarını başlat
+        updateCharCount('modalTitle', 'modalTitleCount', 200);
+        updateCharCount('modalExplanation', 'modalExplanationCount', 1000);
+
+        // Form gönderme
+        function submitPrecautionsForm() {
+            const title = document.getElementById('modalTitle').value.trim();
+            const explanation = document.getElementById('modalExplanation').value.trim();
+            
+            // Validasyon
+            if (title.length < 5) {
+                alert('Başlık en az 5 karakter olmalıdır.');
+                return;
+            }
+            
+            if (explanation.length < 10) {
+                alert('Açıklama en az 10 karakter olmalıdır.');
+                return;
+            }
+
+            // Form verilerini hazırla
+            const formData = new FormData();
+            formData.append('title', title);
+            formData.append('explanation', explanation);
+
+            // AJAX ile gönder
+            fetch('/submit-precautions', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Başarılı - sayfayı yenile
+                    window.location.reload();
+                } else {
+                    alert('Hata: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Hata:', error);
+                alert('Bir hata oluştu. Lütfen tekrar deneyin.');
+            });
+        }
+
+        // Önlem baloncuğunu seç/seçimi kaldır
+        function togglePrecauctionSelection(element) {
+            element.classList.toggle('selected');
+            toggleDeleteButton();
+        }
+
+        // Silme butonunu göster/gizle
+        function toggleDeleteButton() {
+            const selectedItems = document.querySelectorAll('.precaution-item.selected');
+            const deleteBtn = document.querySelector('.delete-precautions-btn');
+            
+            if (selectedItems.length > 0) {
+                deleteBtn.style.display = 'inline-flex';
+            } else {
+                deleteBtn.style.display = 'none';
+            }
+        }
+
+        // Seçili önlemleri sil
+        function deleteSelectedPrecautions() {
+            const selectedItems = document.querySelectorAll('.precaution-item.selected');
+            
+            if (selectedItems.length === 0) {
+                alert('Silinecek önlem seçilmedi!');
+                return;
+            }
+
+            if (!confirm(`${selectedItems.length} adet önlem silinecek. Emin misiniz?`)) {
+                return;
+            }
+
+            // Seçili ID'leri topla
+            const selectedIds = Array.from(selectedItems).map(item => item.dataset.precautionId);
+
+            // AJAX ile silme isteği gönder
+            fetch('/delete-precautions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ ids: selectedIds })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`${data.deleted_count} adet önlem başarıyla silindi!`);
+                    window.location.reload();
+                } else {
+                    alert('Hata: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Hata:', error);
+                alert('Bir hata oluştu. Lütfen tekrar deneyin.');
+            });
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+    </script>
+</body>
+</html> 

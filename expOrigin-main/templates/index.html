@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Güvenlik Yönetim Sistemi</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script defer src="{{ url_for('static', filename='script.js') }}"></script>
+</head>
+<body>
+    <!-- Navbar -->
+    {% include '_navbar.html' %}
+
+    <!-- Ana İçerik -->
+    <main class="main-content">
+        <div id="js-config"
+             data-auth="{% if session.user_id %}1{% else %}0{% endif %}"
+             data-profile-url="{{ url_for('profile') }}"
+             data-login-url="{{ url_for('login') }}"
+             data-reports-url="{{ url_for('raporlar') }}"></div>
+        <div class="hero-section">
+            <h1 class="hero-title">Güvenlik Yönetim Sistemi</h1>
+            <p class="hero-subtitle">Risk ve olay bildirimlerinizi güvenli bir şekilde yönetin, eğitimlerinizi takip edin ve raporlarınızı görüntüleyin.</p>
+            
+            <div class="safety-info">
+                <h2>İş Sağlığı ve Güvenliği</h2>
+                <p>İş sağlığı ve güvenliği, çalışanların sağlığını korumak ve iş kazalarını önlemek için uygulanan sistemli yaklaşımların bütünüdür. Bu sistem, işyerindeki risk faktörlerini belirleyerek, gerekli önlemleri almayı ve çalışanların güvenli bir ortamda çalışmasını sağlamayı hedefler. Düzenli eğitimler, risk değerlendirmeleri ve güvenlik raporları ile işyeri güvenliği sürekli olarak izlenir ve iyileştirilir. Çalışanların sağlığı ve güvenliği her zaman önceliğimizdir.</p>
+            </div>
+            
+        </div>
+    </main>
+
+    <!-- Admin Bildirim Penceresi -->
+    {% if session.user_id %}
+    <div id="notification-container" class="notification-container" style="display: none;">
+        <div class="notification-modal">
+            <div class="notification-header">
+                <div class="notification-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z" fill="#FF6B6B"/>
+                    </svg>
+                </div>
+                <h3 class="notification-title">Yeni Acil Yardım Sinyali!</h3>
+                <button class="notification-close" onclick="closeNotification()">×</button>
+            </div>
+            <div class="notification-content">
+                <div class="notification-item">
+                    <span class="notification-label">Rapor Türü:</span>
+                    <span class="notification-value" id="report-type"></span>
+                </div>
+                <div class="notification-item">
+                    <span class="notification-label">Raporu Gönderen:</span>
+                    <span class="notification-value" id="reporter-name"></span>
+                </div>
+                <div class="notification-item">
+                    <span class="notification-label">Tarih:</span>
+                    <span class="notification-value" id="report-date"></span>
+                </div>
+            </div>
+            <div class="notification-actions">
+                <button class="notification-btn primary" onclick="viewReport()">Raporu Görüntüle</button>
+                <button class="notification-btn secondary" onclick="closeNotification()">Kapat</button>
+            </div>
+        </div>
+    </div>
+
+    {% if session.is_admin %}
+    <!-- Debug Butonu (Sadece admin için) -->
+    <div class="debug-btn" onclick="debugReports()" title="Debug Raporları">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="white"/>
+            <path d="M2 17L12 22L22 17" fill="white"/>
+            <path d="M2 12L12 17L22 12" fill="white"/>
+        </svg>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <!-- Sabit Rapor Butonu -->
+    <div class="fixed-report-btn" onclick="handleReportClick()"></div>
+
+    <script>
+        // Shared UI
+        SharedUI.initNavbarUI();
+        SharedUI.initProfileButton();
+
+        // Global config from DOM
+        const CONFIG_EL = document.getElementById('js-config');
+        const IS_AUTH = CONFIG_EL?.dataset.auth === '1';
+        const PROFILE_URL = CONFIG_EL?.dataset.profileUrl || '/profile';
+        const LOGIN_URL = CONFIG_EL?.dataset.loginUrl || '/login';
+        const REPORTS_URL = CONFIG_EL?.dataset.reportsUrl || '/raporlar';
+
+        // Rapor buton tıklama işlemi
+        function handleReportClick() {
+            if (IS_AUTH) {
+                fetch('/submit-emergency-report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(r => r.json())
+                .then(data => {
+                    alert(data.success ? 'Acil yardım sinyali başarıyla gönderildi!' : ('Hata: ' + data.message));
+                })
+                .catch(error => {
+                    console.error('Hata:', error);
+                    alert('Bir hata oluştu. Lütfen tekrar deneyin.');
+                });
+            } else {
+                window.location.href = LOGIN_URL;
+            }
+        }
+
+        // Bildirim penceresini kapat
+        function closeNotification() {
+            const container = document.getElementById('notification-container');
+            container.style.display = 'none';
+        }
+
+        // Raporu görüntüle
+        function viewReport() { window.location.href = REPORTS_URL; }
+
+        // Admin bildirimleri SharedUI üzerinden
+        SharedUI.maybeInitAdminNotifications();
+
+        // Bildirim penceresini göster
+        function showNotification(report) {
+            document.getElementById('report-type').textContent = report.type;
+            document.getElementById('reporter-name').textContent = report.reporter_name;
+            document.getElementById('report-date').textContent = new Date(report.date).toLocaleString('tr-TR');
+            
+            const container = document.getElementById('notification-container');
+            container.style.display = 'flex';
+            
+            // Ses efekti (opsiyonel)
+            playNotificationSound();
+        }
+
+        // Ses: SharedUI içinde kullanılmakta
+
+        // Debug raporları
+        function debugReports() { SharedUI.debugReports(); }
+
+        // No manual init required; SharedUI handles notifications
+    </script>
+</body>
+</html> 

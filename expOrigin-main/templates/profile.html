@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profil - Güvenlik Yönetim Sistemi</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</head>
+<body>
+    <!-- Navbar -->
+    {% include '_navbar.html' %}
+
+    <!-- Ana İçerik -->
+    <main class="main-content">
+        <div class="register-container">
+            <div class="register-form">
+                <h1 class="register-title">Profil Bilgileri</h1>
+                
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'error' if category == 'error' else 'success' }}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                <div class="profile-info">
+                    <div class="info-group">
+                        <label>Ad Soyad:</label>
+                        <div class="info-value">{{ session.fullname }}</div>
+                    </div>
+                    
+                    <div class="info-group">
+                        <label>E-Posta:</label>
+                        <div class="info-value">{{ session.email }}</div>
+                    </div>
+                    
+                    <div class="info-group">
+                        <label>Şifre:</label>
+                        <div class="info-value">••••••••••</div>
+                    </div>
+                </div>
+                
+                <form method="POST" action="{{ url_for('update_profile') }}">
+                    <h3 class="form-subtitle">Bilgileri Güncelle</h3>
+                    
+                    <div class="form-group input-with-actions">
+                        <label for="email">Yeni E-posta</label>
+                        <div class="input-action-wrapper">
+                            <input type="email" id="email" name="email" value="{{ session.email }}" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group input-with-actions">
+                        <label for="password">Yeni Şifre</label>
+                        <div class="input-action-wrapper">
+                            <input type="password" id="password" name="password" placeholder="Yeni şifrenizi girin" required>
+                            <button type="button" class="input-action-btn" id="passwordToggleBtn" title="Göster/Gizle">
+                                <img src="{{ url_for('static', filename='images/showPassword.png') }}" alt="Show">
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="register-btn">Güncelle</button>
+                </form>
+                
+                <div class="profile-actions">
+                    <a href="{{ url_for('logout') }}" class="logout-btn">Çıkış Yap</a>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Admin Bildirim Penceresi -->
+    {% if session.user_id %}
+    <div id="notification-container" class="notification-container" style="display: none;">
+        <div class="notification-modal">
+            <div class="notification-header">
+                <div class="notification-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z" fill="#FF6B6B"/>
+                    </svg>
+                </div>
+                <h3 class="notification-title">Yeni Acil Yardım Sinyali!</h3>
+                <button class="notification-close" onclick="closeNotification()">×</button>
+            </div>
+            <div class="notification-content">
+                <div class="notification-item">
+                    <span class="notification-label">Rapor Türü:</span>
+                    <span class="notification-value" id="report-type"></span>
+                </div>
+                <div class="notification-item">
+                    <span class="notification-label">Raporu Gönderen:</span>
+                    <span class="notification-value" id="reporter-name"></span>
+                </div>
+                <div class="notification-item">
+                    <span class="notification-label">Tarih:</span>
+                    <span class="notification-value" id="report-date"></span>
+                </div>
+            </div>
+            <div class="notification-actions">
+                <button class="notification-btn primary" onclick="viewReport()">Raporu Görüntüle</button>
+                <button class="notification-btn secondary" onclick="closeNotification()">Kapat</button>
+            </div>
+        </div>
+    </div>
+
+    {% if session.is_admin %}
+    <!-- Debug Butonu (Sadece admin için) -->
+    <div class="debug-btn" onclick="debugReports()" title="Debug Raporları">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="white"/>
+            <path d="M2 17L12 22L22 17" fill="white"/>
+            <path d="M2 12L12 17L22 12" fill="white"/>
+        </svg>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <script>
+        // Mobile menü toggle
+        const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+        const navMenu = document.querySelector('.nav-menu');
+
+        mobileMenuBtn.addEventListener('click', () => {
+            navMenu.classList.toggle('active');
+        });
+
+        // Shared navbar init (no auto scroll bg unless data-scroll-bg is present)
+        SharedUI.initNavbarUI();
+
+        // Admin bildirim sistemi
+        let notificationCheckInterval;
+        let lastCheckTime = new Date();
+
+        function closeNotification() {
+            const container = document.getElementById('notification-container');
+            container.style.display = 'none';
+        }
+
+        function viewReport() { window.location.href = "{{ url_for('raporlar') }}"; }
+
+        function checkNewReports() {
+            fetch('/check-new-reports')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.count > 0) {
+                        const latestReport = data.new_reports[0];
+                        showNotification(latestReport);
+                    }
+                })
+                .catch(error => {
+                    console.error('Rapor kontrolü hatası:', error);
+                });
+        }
+
+        function showNotification(report) {
+            document.getElementById('report-type').textContent = report.type;
+            document.getElementById('reporter-name').textContent = report.reporter_name;
+            document.getElementById('report-date').textContent = new Date(report.date).toLocaleString('tr-TR');
+            const container = document.getElementById('notification-container');
+            container.style.display = 'flex';
+            playNotificationSound();
+        }
+
+        function playNotificationSound() {
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT');
+                audio.play();
+            } catch (e) {
+                console.log('Ses çalınamadı:', e);
+            }
+        }
+
+        function initAdminNotifications() {
+            notificationCheckInterval = setInterval(checkNewReports, 10000);
+            checkNewReports();
+        }
+
+        function debugReports() {
+            fetch('/debug-reports')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('=== DEBUG RAPORLARI ===');
+                        console.log('Mevcut Zaman:', data.current_time);
+                        console.log('Toplam Rapor:', data.total_reports);
+                        console.log('Yeni Rapor Sayısı:', data.new_reports_count);
+                        console.log('Tüm Raporlar:', data.all_reports);
+                        console.log('Yeni Raporlar:', data.new_reports);
+                        alert(`Debug Bilgileri:\nToplam Rapor: ${data.total_reports}\nYeni Rapor: ${data.new_reports_count}\nDetaylar için konsolu kontrol edin.`);
+                    } else {
+                        alert('Debug hatası: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Debug hatası:', error);
+                    alert('Debug hatası: ' + error.message);
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/check-admin-status')
+                .then(response => response.json())
+                .then(data => { if (data.is_admin) initAdminNotifications(); })
+                .catch(error => console.error('Admin kontrolü hatası:', error));
+
+            // Email alanı form gönderimi ile güncellenir
+
+            // Password show/hide, edit/confirm
+            const passwordInput = document.getElementById('password');
+            const passwordToggleBtn = document.getElementById('passwordToggleBtn');
+            let passwordVisible = false;
+
+            if (passwordToggleBtn && passwordInput) {
+                passwordToggleBtn.addEventListener('click', () => {
+                    passwordVisible = !passwordVisible;
+                    passwordInput.type = passwordVisible ? 'text' : 'password';
+                    const img = passwordToggleBtn.querySelector('img');
+                    img.src = passwordVisible ? "{{ url_for('static', filename='images/hidePassword.png') }}" : "{{ url_for('static', filename='images/showPassword.png') }}";
+                    img.alt = passwordVisible ? 'Hide' : 'Show';
+                });
+            }
+
+            // Şifre form gönderimi ile güncellenir
+        });
+
+        window.addEventListener('beforeunload', function() {
+            if (notificationCheckInterval) {
+                clearInterval(notificationCheckInterval);
+            }
+        });
+    </script>
+</body>
+</html> 

@@ -1,0 +1,37 @@
+<nav class="navbar">
+    <div class="nav-container">
+        <a href="{{ url_for('index') }}" class="logo">Güvenlik Sistemi</a>
+        <ul class="nav-menu">
+            <li class="nav-item">
+                <a href="{{ url_for('precautions') }}" class="nav-link {% if active_page == 'precautions' %}active{% endif %}">Alınacak Önlemler</a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('risk_bildir') }}" class="nav-link {% if active_page == 'risk' %}active{% endif %}">Risk Bildir</a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('olay_bildir') }}" class="nav-link {% if active_page == 'event' %}active{% endif %}">Olay Bildir</a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('egitimler') }}" class="nav-link {% if active_page == 'education' %}active{% endif %}">Eğitimler</a>
+            </li>
+            {% if session.is_admin %}
+            <li class="nav-item">
+                <a href="{{ url_for('raporlar') }}" class="nav-link {% if active_page == 'reports' %}active{% endif %}">Raporlar</a>
+            </li>
+            {% endif %}
+        </ul>
+        <div class="profile-area">
+            <button class="profile-btn" onclick="handleProfileClick()"></button>
+            {% if session.user_id %}
+            <a href="{{ url_for('profile') }}" class="profile-name">{{ session.fullname }}</a>
+            {% endif %}
+        </div>
+        <div class="mobile-menu-btn">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    </div>
+</nav>
+
+

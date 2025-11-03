@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giriş Yap - Güvenlik Yönetim Sistemi</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</head>
+<body>
+    <!-- Navbar -->
+    {% include '_navbar.html' %}
+
+    <!-- Ana İçerik -->
+    <main class="main-content">
+        <div class="register-container">
+            <div class="register-form">
+                <h1 class="register-title">Giriş Yap</h1>
+                
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'error' if category == 'error' else 'success' }}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                <form method="POST" action="{{ url_for('login') }}">
+                    <div class="form-group">
+                        <label for="email">E-posta</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">Şifre</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    
+                    <button type="submit" class="register-btn">Giriş Yap</button>
+                </form>
+                
+                <div class="login-link">
+                    <p>Hesabınız yok mu? <a href="{{ url_for('register') }}">Kayıt olun</a></p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Shared navbar init (no auto scroll bg unless data-scroll-bg is present)
+        SharedUI.initNavbarUI();
+
+        // Profile buton tıklama işlemi
+        function handleProfileClick() {
+            {% if session.user_id %}
+                window.location.href = "{{ url_for('profile') }}";
+            {% else %}
+                window.location.href = "{{ url_for('login') }}";
+            {% endif %}
+        }
+
+        // Flash mesajlarını otomatik temizle
+        window.addEventListener('load', function() {
+            // Sayfa yüklendiğinde flash mesajlarını temizle
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(function(alert) {
+                setTimeout(function() {
+                    alert.style.opacity = '0';
+                    setTimeout(function() {
+                        alert.remove();
+                    }, 300);
+                }, 3000); // 3 saniye sonra kaybolur
+            });
+        });
+    </script>
+</body>
+</html> 
