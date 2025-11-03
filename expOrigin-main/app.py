@@ -7,6 +7,7 @@ from flask import session, flash, redirect, url_for
 from datetime import datetime
 import os
 import re
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 from sqlalchemy import text
