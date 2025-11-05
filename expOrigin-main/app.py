@@ -929,6 +929,73 @@ def logout():
     flash("Başarıyla çıkış yaptınız.", "success")
     return redirect(url_for("index"))
 
+@app.route("/api/mobile-login", methods=["POST"])
+def api_mobile_login():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip()
+    password = (data.get("password") or "")
+    if not email or not password:
+        return jsonify({"success": False, "message": "Eksik bilgiler"}), 400
+
+    try:
+        with get_db_connection() as conn:
+            user = conn.execute(text("""
+                SELECT id, fullname, email, password, role
+                FROM users
+                WHERE email = :email
+                LIMIT 1
+            """), {"email": email}).fetchone()
+
+        if user and check_password_hash(user[3], password):
+            return jsonify({
+                "success": True,
+                "message": "Giriş başarılı!",
+                "user": {
+                    "id": user[0],
+                    "fullname": user[1],
+                    "email": user[2],
+                    "is_admin": bool(user[4])
+                }
+            })
+        else:
+            return jsonify({"success": False, "message": "E-posta veya şifre hatalı!"}), 401
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Hata: {e}"}), 500
+
+
+
+@app.route("/api/mobile-register", methods=["POST"])
+def api_mobile_register():
+    data = request.get_json(silent=True) or {}
+    fullname = (data.get("fullname") or "").strip()
+    email = (data.get("email") or "").strip()
+    password = (data.get("password") or "")
+
+    if not fullname or not email or not password:
+        return jsonify({"success": False, "message": "Tüm alanlar doldurulmalıdır!"}), 400
+    if len(password) < 6:
+        return jsonify({"success": False, "message": "Şifre en az 6 karakter olmalıdır!"}), 400
+
+    try:
+        with db.engine.begin() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM users WHERE LOWER(email)=LOWER(:e) LIMIT 1"),
+                {"e": email}
+            ).fetchone()
+            if exists:
+                return jsonify({"success": False, "message": "Bu e-posta adresi zaten kayıtlı!"}), 409
+
+            hashed_pw = generate_password_hash(password)
+            conn.execute(
+                text("INSERT INTO users (fullname, email, password, role) VALUES (:fn, :em, :pw, :r)"),
+                {"fn": fullname, "em": email, "pw": hashed_pw, "r": False}
+            )
+
+        return jsonify({"success": True, "message": "Kayıt başarılı! Giriş yapabilirsiniz."})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Hata: {e}"}), 500
+
+
 # -----------------------------------------------------
 # Araçlar / Debug
 # -----------------------------------------------------
