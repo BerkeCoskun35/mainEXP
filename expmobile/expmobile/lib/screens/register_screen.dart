@@ -23,7 +23,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool _isLoading = false;
 
-  // 🌐 Render API endpoint
   final String apiUrl = "https://mainexp-1.onrender.com/api/mobile-register";
 
   @override
@@ -57,7 +56,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        // Kayıt sonrası giriş ekranına dön
+
+        // ✅ Başarılı kayıt sonrası LoginScreen'e yönlendir
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -87,9 +87,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Kayıt Ol'),
+        title: const Text(
+          'Kayıt Ol',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        iconTheme: const IconThemeData(
+          color: Colors.white, // 🎨 LoginScreen ile aynı renk
+          size: 24,
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new), // 🔙 Aynı ikon
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+            );
+          },
+        ),
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -251,7 +267,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     // 🔙 Giriş Sayfasına Geçiş
                     TextButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () => Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const LoginScreen()),
+                      ),
                       child: const Text(
                         'Zaten bir hesabın var mı? Giriş yap',
                         style: TextStyle(color: Colors.black54),

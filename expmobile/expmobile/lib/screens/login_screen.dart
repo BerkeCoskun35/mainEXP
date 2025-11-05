@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'home_screen.dart';
 import 'register_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,8 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String? password;
   bool _isLoading = false;
 
-  // 🌐 Render API endpoint
-  final String apiUrl = "https://mainexp-1.onrender.com/api/mobile-register";
+  final String apiUrl = "https://mainexp-1.onrender.com/api/mobile-login";
 
   Future<void> loginUser() async {
     setState(() => _isLoading = true);
@@ -36,12 +36,19 @@ class _LoginScreenState extends State<LoginScreen> {
       final data = json.decode(response.body);
 
       if (response.statusCode == 200 && data["success"] == true) {
+        // 🔹 Oturum bilgilerini kaydet
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('email', data['user']['email']);
+        await prefs.setString('fullname', data['user']['fullname']);
+        await prefs.setBool('is_admin', data['user']['is_admin'] ?? false);
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Hoş geldin, ${data['user']['fullname']}"),
             backgroundColor: Colors.green,
           ),
         );
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
@@ -71,9 +78,25 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Giriş Yap'),
+        title: const Text(
+          'Giriş Yap',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        iconTheme: const IconThemeData(
+          color: Colors.white, // 🎨 RegisterScreen ile aynı renk
+          size: 24,
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new), // 👈 Aynı ikon
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+            );
+          },
+        ),
       ),
       body: Container(
         decoration: const BoxDecoration(
