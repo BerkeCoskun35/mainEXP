@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
 import '../widgets/app_bottom_menu.dart';
 
 class EventReportScreen extends StatefulWidget {
@@ -17,6 +17,7 @@ class _EventReportScreenState extends State<EventReportScreen> {
   String? selectedDepartment;
   List<String> selectedEventTypes = [];
   List<String> eventCategories = [];
+
   final TextEditingController locationController = TextEditingController();
   final TextEditingController detailsController = TextEditingController();
   final TextEditingController witnessesController = TextEditingController();
@@ -34,7 +35,7 @@ class _EventReportScreenState extends State<EventReportScreen> {
 
   Future<void> fetchEventCategories() async {
     try {
-      final response = await http.get(Uri.parse("$baseUrl/api/event-categories"));
+      final response = await http.get(Uri.parse('$baseUrl/api/mobile-event-categories'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data["success"] == true) {
@@ -50,12 +51,23 @@ class _EventReportScreenState extends State<EventReportScreen> {
     }
   }
 
-  Future<void> submitEventReport() async {
+  Future<void> _pickImage() async {
+    final picked = await _picker.pickImage(source: ImageSource.gallery);
+    if (picked != null) {
+      setState(() {
+        if (selectedImages.length < 5) {
+          selectedImages.add(File(picked.path));
+        }
+      });
+    }
+  }
+
+  Future<void> _submitReport() async {
     if (!_formKey.currentState!.validate()) return;
 
     try {
       final response = await http.post(
-        Uri.parse("$baseUrl/api/mobile-event-report"),
+        Uri.parse('$baseUrl/api/mobile-event-report'),
         headers: {"Content-Type": "application/json"},
         body: json.encode({
           "department": selectedDepartment,
@@ -63,48 +75,31 @@ class _EventReportScreenState extends State<EventReportScreen> {
           "location": locationController.text,
           "details": detailsController.text,
           "witnesses": witnessesController.text,
-          "photos": [], // Fotoğraf upload backend'e eklenebilir
         }),
       );
 
       final data = json.decode(response.body);
-      if (response.statusCode == 200 && data["success"] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data["message"]),
-            backgroundColor: Colors.green,
-          ),
-        );
-        _formKey.currentState!.reset();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(data["message"] ?? "Rapor gönderildi."),
+          backgroundColor: data["success"] == true ? Colors.green : Colors.red,
+        ),
+      );
+
+      if (data["success"] == true) {
         setState(() {
           selectedDepartment = null;
           selectedEventTypes.clear();
+          locationController.clear();
+          detailsController.clear();
+          witnessesController.clear();
           selectedImages.clear();
         });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data["message"] ?? "Kayıt başarısız"),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Sunucuya bağlanılamadı: $e"),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text("Sunucu hatası: $e")),
       );
-    }
-  }
-
-  Future<void> pickImages() async {
-    final picked = await _picker.pickMultiImage();
-    if (picked.isNotEmpty) {
-      setState(() {
-        selectedImages.addAll(picked.map((x) => File(x.path)));
-      });
     }
   }
 
@@ -113,11 +108,11 @@ class _EventReportScreenState extends State<EventReportScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Olay Bildirimi'),
+        title: const Text("Olay Bildirimi", style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: true,
       ),
+      bottomNavigationBar: const AppBottomMenu(currentIndex: 2),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -126,69 +121,74 @@ class _EventReportScreenState extends State<EventReportScreen> {
             end: Alignment.bottomRight,
           ),
         ),
-        child: SafeArea(
+        child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Container(
+              width: 380,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.9),
                 borderRadius: BorderRadius.circular(20),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 15, offset: Offset(0, 6)),
+                ],
               ),
               child: Form(
                 key: _formKey,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const Center(
                       child: Text(
-                        'Olay Bildirimi',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        "Olay Bildirimi",
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                       ),
                     ),
-                    const SizedBox(height: 25),
+                    const SizedBox(height: 20),
 
                     // Departman
-                    const Text('Departman'),
-                    const SizedBox(height: 10),
+                    const Text("Departman", style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
                     Wrap(
                       spacing: 10,
                       children: departments.map((dept) {
                         return ChoiceChip(
                           label: Text(dept),
                           selected: selectedDepartment == dept,
-                          onSelected: (val) =>
-                              setState(() => selectedDepartment = dept),
-                          selectedColor: const Color(0xFF667EEA),
+                          onSelected: (_) => setState(() => selectedDepartment = dept),
+                          selectedColor: Colors.indigo,
+                          labelStyle: TextStyle(
+                            color: selectedDepartment == dept ? Colors.white : Colors.black,
+                          ),
                         );
                       }).toList(),
                     ),
                     const SizedBox(height: 20),
 
                     // Olay Türü
-                    const Text('Olay Türü'),
-                    const SizedBox(height: 10),
+                    const Text("Olay Türü", style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
                     Wrap(
                       spacing: 10,
-                      runSpacing: 10,
+                      runSpacing: 8,
                       children: eventCategories.map((type) {
-                        final isSelected = selectedEventTypes.contains(type);
                         return FilterChip(
                           label: Text(type),
-                          selected: isSelected,
-                          onSelected: (val) {
+                          selected: selectedEventTypes.contains(type),
+                          onSelected: (isSelected) {
                             setState(() {
-                              if (val) {
-                                selectedEventTypes.add(type);
-                              } else {
-                                selectedEventTypes.remove(type);
-                              }
+                              isSelected
+                                  ? selectedEventTypes.add(type)
+                                  : selectedEventTypes.remove(type);
                             });
                           },
-                          selectedColor: const Color(0xFF764BA2),
+                          selectedColor: Colors.indigo,
+                          labelStyle: TextStyle(
+                            color: selectedEventTypes.contains(type)
+                                ? Colors.white
+                                : Colors.black,
+                          ),
                         );
                       }).toList(),
                     ),
@@ -198,99 +198,96 @@ class _EventReportScreenState extends State<EventReportScreen> {
                     TextFormField(
                       controller: locationController,
                       decoration: const InputDecoration(
-                        labelText: 'Olay Yeri',
-                        hintText: 'Olayın gerçekleştiği yer',
+                        labelText: "Olay Yeri",
                         border: OutlineInputBorder(),
                       ),
                       validator: (v) =>
-                          v!.isEmpty ? 'Olay yerini giriniz' : null,
+                          v == null || v.isEmpty ? "Olay yerini giriniz" : null,
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 15),
 
                     // Olay Detayları
                     TextFormField(
                       controller: detailsController,
-                      maxLines: 4,
+                      maxLines: 3,
                       decoration: const InputDecoration(
-                        labelText: 'Olay Detayları',
+                        labelText: "Olay Detayları",
                         border: OutlineInputBorder(),
                       ),
                       validator: (v) =>
-                          v!.isEmpty ? 'Detayları giriniz' : null,
+                          v == null || v.isEmpty ? "Olay detaylarını giriniz" : null,
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 15),
 
                     // Tanıklar
                     TextFormField(
                       controller: witnessesController,
                       decoration: const InputDecoration(
-                        labelText: 'Tanıklar (Varsa)',
+                        labelText: "Tanıklar (Varsa)",
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 20),
 
                     // Fotoğraflar
-                    const Text('Fotoğraflar (maks. 5)'),
+                    const Text("Fotoğraflar (maks. 5)",
+                        style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 10),
                     Wrap(
-                      spacing: 10,
+                      spacing: 8,
                       children: [
-                        for (var img in selectedImages)
-                          Image.file(img,
-                              width: 70, height: 70, fit: BoxFit.cover),
+                        ...selectedImages.map((img) => Image.file(img, width: 60, height: 60)),
                         if (selectedImages.length < 5)
                           GestureDetector(
-                            onTap: pickImages,
+                            onTap: _pickImage,
                             child: Container(
-                              width: 70,
-                              height: 70,
-                              color: Colors.grey[300],
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey),
+                              ),
                               child: const Icon(Icons.add),
                             ),
-                          )
+                          ),
                       ],
                     ),
                     const SizedBox(height: 30),
 
-                    // Gönder butonu
-                    Center(
-                      child: ElevatedButton(
-                        onPressed: submitEventReport,
-                        style: ElevatedButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
+                    // Gönder Butonu
+                    ElevatedButton(
+                      onPressed: _submitReport,
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Ink(
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-                              begin: Alignment.centerLeft,
-                              end: Alignment.centerRight,
-                            ),
-                            borderRadius:
-                                BorderRadius.all(Radius.circular(12)),
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                      ),
+                      child: Ink(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
                           ),
-                          child: Container(
-                            alignment: Alignment.center,
-                            constraints: const BoxConstraints(
-                                minHeight: 50, minWidth: 250),
-                            child: const Text(
-                              'Olay Raporunu Gönder',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
+                          borderRadius: BorderRadius.all(Radius.circular(12)),
+                        ),
+                        child: Container(
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          child: const Text(
+                            'Olay Raporunu Gönder',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       ),
-                    )
+                    ),
                   ],
                 ),
               ),
@@ -298,7 +295,6 @@ class _EventReportScreenState extends State<EventReportScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: const AppBottomMenu(currentIndex: 2),
     );
   }
 }
