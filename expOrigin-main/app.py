@@ -997,15 +997,37 @@ def api_mobile_register():
     
 
 @app.route('/api/mobile-event-categories', methods=['GET'])
-def get_event_categories():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT type FROM eventcategories ORDER BY id ASC;")
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    categories = [r[0] for r in rows]
-    return jsonify({"success": True, "categories": categories})
+def get_mobile_event_categories():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # ✅ Veritabanı sorgusu: tablo "eventcategories", sütun "type"
+        cur.execute("SELECT type FROM eventcategories ORDER BY id ASC;")
+        rows = cur.fetchall()
+
+        # ✅ Bağlantıyı kapat
+        cur.close()
+        conn.close()
+
+        # ✅ Liste haline getir
+        categories = [r[0] for r in rows]
+
+        print("✅ Event categories fetched:", categories)  # terminal log
+        return jsonify({
+            "success": True,
+            "categories": categories
+        }), 200
+
+    except Exception as e:
+        import traceback
+        print("❌ ERROR in /api/mobile-event-categories:", e)
+        print(traceback.format_exc())
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
 
 
 @app.route('/api/mobile-event-report', methods=['POST'])
