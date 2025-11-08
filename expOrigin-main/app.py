@@ -999,27 +999,21 @@ def api_mobile_register():
 @app.route('/api/mobile-event-categories', methods=['GET'])
 def get_mobile_event_categories():
     try:
-        conn = get_db_connection()  # Bu muhtemelen SQLAlchemy Engine
-        result = conn.execute("SELECT type FROM eventcategories ORDER BY id ASC;")
+        conn = get_db_connection()  # SQLAlchemy connection
+        query = text("SELECT type FROM eventcategories ORDER BY id ASC;")
+        result = conn.execute(query)
 
-        # Sonuçları listeye dönüştür
         categories = [row[0] for row in result.fetchall()]
+        conn.close()
 
         print("✅ Event categories fetched:", categories)
-        return jsonify({
-            "success": True,
-            "categories": categories
-        }), 200
+        return jsonify({"success": True, "categories": categories}), 200
 
     except Exception as e:
         import traceback
         print("❌ ERROR in /api/mobile-event-categories:", e)
         print(traceback.format_exc())
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
-
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 @app.route('/api/mobile-event-report', methods=['POST'])
