@@ -1000,7 +1000,7 @@ def api_mobile_register():
 def get_event_categories():
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT name FROM event_categories ORDER BY id ASC;")
+    cur.execute("SELECT name FROM eventcategories ORDER BY id ASC;")
     rows = cur.fetchall()
     cur.close()
     conn.close()
