@@ -996,7 +996,7 @@ def api_mobile_register():
         return jsonify({"success": False, "message": f"Hata: {e}"}), 500
     
 
-@app.route('/api/event-categories', methods=['GET'])
+@app.route('/api/mobile-event-categories', methods=['GET'])
 def get_event_categories():
     conn = get_db_connection()
     cur = conn.cursor()
