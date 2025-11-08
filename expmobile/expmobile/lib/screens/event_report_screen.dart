@@ -36,14 +36,15 @@ class _EventReportScreenState extends State<EventReportScreen> {
   Future<void> fetchEventCategories() async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/api/mobile-event-categories'));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data["success"] == true) {
-          setState(() {
-            eventCategories = List<String>.from(data["categories"]);
-          });
-        }
-      }
+if (response.statusCode == 200) {
+  final data = json.decode(utf8.decode(response.bodyBytes)); // <--- önemli fark
+  if (data["success"] == true) {
+    setState(() {
+      eventCategories = List<String>.from(data["categories"]);
+    });
+  }
+}
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Olay türleri yüklenemedi: $e")),
