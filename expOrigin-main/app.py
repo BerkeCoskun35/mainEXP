@@ -999,21 +999,13 @@ def api_mobile_register():
 @app.route('/api/mobile-event-categories', methods=['GET'])
 def get_mobile_event_categories():
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
+        conn = get_db_connection()  # Bu muhtemelen SQLAlchemy Engine
+        result = conn.execute("SELECT type FROM eventcategories ORDER BY id ASC;")
 
-        # ✅ Veritabanı sorgusu: tablo "eventcategories", sütun "type"
-        cur.execute("SELECT type FROM eventcategories ORDER BY id ASC;")
-        rows = cur.fetchall()
+        # Sonuçları listeye dönüştür
+        categories = [row[0] for row in result.fetchall()]
 
-        # ✅ Bağlantıyı kapat
-        cur.close()
-        conn.close()
-
-        # ✅ Liste haline getir
-        categories = [r[0] for r in rows]
-
-        print("✅ Event categories fetched:", categories)  # terminal log
+        print("✅ Event categories fetched:", categories)
         return jsonify({
             "success": True,
             "categories": categories
