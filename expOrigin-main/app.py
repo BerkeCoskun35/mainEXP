@@ -994,6 +994,51 @@ def api_mobile_register():
         return jsonify({"success": True, "message": "Kayıt başarılı! Giriş yapabilirsiniz."})
     except Exception as e:
         return jsonify({"success": False, "message": f"Hata: {e}"}), 500
+    
+
+@app.route('/api/event-categories', methods=['GET'])
+def get_event_categories():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM event_categories ORDER BY id ASC;")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    categories = [r[0] for r in rows]
+    return jsonify({"success": True, "categories": categories})
+
+
+@app.route('/api/mobile-event-report', methods=['POST'])
+def submit_event_report():
+    try:
+        data = request.get_json()
+        department = data.get("department")
+        event_types = data.get("event_types")   # liste olarak gelecek
+        location = data.get("location")
+        details = data.get("details")
+        witnesses = data.get("witnesses")
+        photos = data.get("photos", [])         # opsiyonel
+
+        if not department or not location or not details:
+            return jsonify({"success": False, "message": "Eksik alanlar var."}), 400
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+            INSERT INTO event_reports (department, event_types, location, details, witnesses, photos)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id;
+        """, (department, event_types, location, details, witnesses, photos))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({"success": True, "message": "Olay başarıyla kaydedildi!"})
+    except Exception as e:
+        print("Hata:", e)
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # -----------------------------------------------------

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/event_report_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/risk_report_screen.dart';
@@ -34,6 +35,7 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/home': (context) => const HomeScreen(),
+        '/event-report': (context) => const EventReportScreen(),
         '/profile': (context) => const ProfileScreen(),
         '/risk-report': (context) => const RiskReportScreen(),
       },
