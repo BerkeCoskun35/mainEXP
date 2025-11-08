@@ -1009,7 +1009,7 @@ def get_event_categories():
 
 
 @app.route('/api/mobile-event-report', methods=['POST'])
-def submit_event_report():
+def submit_event_report_mobile():
     try:
         data = request.get_json()
         department = data.get("department")
