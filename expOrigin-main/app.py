@@ -1050,19 +1050,42 @@ def submit_event_report_mobile():
 
 
 @app.route("/api/mobile/profile/password", methods=["POST"])
-@login_required
-def api_update_password():
+def mobile_api_update_password():
     try:
         payload = request.get_json(silent=True) or {}
-        new_password = (payload.get("password") or "").strip()
-        if not new_password or len(new_password) < 6:
-            return jsonify({"success": False, "message": "Şifre en az 6 karakter olmalıdır!"}), 400
 
-        hashed_password = generate_password_hash(new_password)
+        email = (payload.get("email") or "").strip().lower()
+        current_password = (payload.get("current_password") or "").strip()
+        new_password = (payload.get("new_password") or "").strip()
+
+        if not email:
+            return jsonify({"success": False, "message": "E-posta zorunludur."}), 400
+        if not current_password:
+            return jsonify({"success": False, "message": "Mevcut şifre zorunludur."}), 400
+        if not new_password or len(new_password) < 6:
+            return jsonify({"success": False, "message": "Yeni şifre en az 6 karakter olmalıdır!"}), 400
+
         with db.engine.begin() as conn:
-            conn.execute(text("UPDATE users SET password=:p WHERE id=:uid"),
-                         {"p": hashed_password, "uid": session["user_id"]})
-        return jsonify({"success": True, "message": "Şifre güncellendi."})
+            user = conn.execute(
+                text("SELECT id, password FROM users WHERE email=:e LIMIT 1"),
+                {"e": email}
+            ).mappings().first()
+
+            if not user:
+                return jsonify({"success": False, "message": "Kullanıcı bulunamadı."}), 404
+
+            if not check_password_hash(user["password"], current_password):
+                return jsonify({"success": False, "message": "Mevcut şifre yanlış."}), 401
+
+            hashed_password = generate_password_hash(new_password)
+
+            conn.execute(
+                text("UPDATE users SET password=:p WHERE id=:uid"),
+                {"p": hashed_password, "uid": user["id"]}
+            )
+
+        return jsonify({"success": True, "message": "Şifre güncellendi."}), 200
+
     except Exception as e:
         return jsonify({"success": False, "message": f"Hata: {e}"}), 500
 
