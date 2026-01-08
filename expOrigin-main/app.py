@@ -1019,34 +1019,52 @@ def get_mobile_event_categories():
 @app.route('/api/mobile-event-report', methods=['POST'])
 def submit_event_report_mobile():
     try:
-        data = request.get_json()
-        department = data.get("department")
-        event_types = data.get("event_types")   # liste olarak gelecek
-        location = data.get("location")
-        details = data.get("details")
-        witnesses = data.get("witnesses")
-        photos = data.get("photos", [])         # opsiyonel
+        data = request.get_json(silent=True) or {}
 
-        if not department or not location or not details:
-            return jsonify({"success": False, "message": "Eksik alanlar var."}), 400
+        department = (data.get("department") or "").strip()
+        event_types = data.get("event_types") or []   # list bekliyoruz
+        location = (data.get("location") or "").strip()
+        details = (data.get("details") or "").strip()
+        witnesses = (data.get("witnesses") or "").strip()
 
-        conn = get_db_connection()
-        cur = conn.cursor()
+        # basic validation
+        if (not department or not location or len(details) < 5
+            or not isinstance(event_types, list) or len(event_types) == 0):
+            return jsonify({"success": False, "message": "Eksik veya hatalı alanlar"}), 400
 
-        cur.execute("""
-            INSERT INTO event_reports (department, event_types, location, details, witnesses, photos)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id;
-        """, (department, event_types, location, details, witnesses, photos))
+        summary_type = "Olay Bildirim Raporlaması"
+        summary_details = (
+            f"Departman: {department} | "
+            f"Olay Türleri: {', '.join([str(x) for x in event_types])} | "
+            f"Yer: {location} | "
+            f"Detaylar: {details}"
+        )
 
-        conn.commit()
-        cur.close()
-        conn.close()
+        # Mobil login session üretmiyor olabilir, o yüzden user_id yoksa 0 yazıyoruz.
+        # (İstersen Flutter’dan user_id göndertip burada kullanırız)
+        with db.engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO reports (id, type, date, fullname, details, witnesses, department)
+                    VALUES (:uid, :type, :date, :fullname, :details, :witnesses, :department)
+                """),
+                {
+                    "uid": session.get("user_id", 0),
+                    "type": summary_type,
+                    "date": datetime.utcnow(),
+                    "fullname": data.get("fullname") or session.get("fullname") or "",
+                    "details": summary_details,
+                    "witnesses": witnesses or None,
+                    "department": department,
+                }
+            )
 
-        return jsonify({"success": True, "message": "Olay başarıyla kaydedildi!"})
+        return jsonify({"success": True, "message": "Olay başarıyla kaydedildi!"}), 200
+
     except Exception as e:
-        print("Hata:", e)
+        app.logger.exception("mobile-event-report error")
         return jsonify({"success": False, "message": str(e)}), 500
+
 
 
 @app.route("/api/mobile/profile/password", methods=["POST"])
