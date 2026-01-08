@@ -9,6 +9,8 @@ from sqlalchemy import text
 from dotenv import load_dotenv
 import os
 import re
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+
 
 # -----------------------------------------------------
 # .env yükle
@@ -20,6 +22,25 @@ load_dotenv()
 # -----------------------------------------------------
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "your-secret-key-here")
+
+
+MOBILE_TOKEN_TTL_SECONDS = int(os.getenv("MOBILE_TOKEN_TTL_SECONDS", "2592000"))  # 30 gün
+
+def _mobile_serializer():
+    return URLSafeTimedSerializer(app.secret_key, salt="mobile-auth")
+
+def create_mobile_token(user_id: int) -> str:
+    return _mobile_serializer().dumps({"uid": int(user_id)})
+
+def verify_mobile_token(token: str) -> int | None:
+    try:
+        data = _mobile_serializer().loads(token, max_age=MOBILE_TOKEN_TTL_SECONDS)
+        return int(data.get("uid"))
+    except (BadSignature, SignatureExpired, Exception):
+        return None
+
+
+
 
 def get_db_url() -> str:
     """
@@ -192,6 +213,45 @@ def login_required(f):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated_function
+
+
+def mobile_auth_required(admin_only=False):
+    def deco(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            auth = request.headers.get("Authorization", "")
+            if not auth.startswith("Bearer "):
+                return jsonify({"success": False, "message": "Token gerekli"}), 401
+            token = auth.split(" ", 1)[1].strip()
+            if not token:
+                return jsonify({"success": False, "message": "Token gerekli"}), 401
+            try:
+                uid = verify_mobile_token(token)
+            except SignatureExpired:
+                return jsonify({"success": False, "message": "Token süresi doldu"}), 401
+            except BadSignature:
+                return jsonify({"success": False, "message": "Geçersiz token"}), 401
+            except Exception as e:
+                return jsonify({"success": False, "message": f"Token hatası: {e}"}), 401
+
+            with get_db_connection() as conn:
+                user = conn.execute(
+                    text("SELECT id, fullname, email, role FROM users WHERE id=:uid"),
+                    {"uid": uid}
+                ).mappings().first()
+
+            if not user:
+                return jsonify({"success": False, "message": "Kullanıcı bulunamadı"}), 401
+
+            if admin_only and not bool(user["role"]):
+                return jsonify({"success": False, "message": "Admin gerekli"}), 403
+
+            # request context'e iliştir
+            request.mobile_user = user
+            return f(*args, **kwargs)
+        return wrapper
+    return deco
+
 
 def admin_required(f):
     @wraps(f)
@@ -932,34 +992,134 @@ def logout():
 
 @app.route("/api/mobile-login", methods=["POST"])
 def api_mobile_login():
-    data = request.get_json(silent=True) or {}
-    email = (data.get("email") or "").strip()
-    password = (data.get("password") or "")
-    if not email or not password:
-        return jsonify({"success": False, "message": "Eksik bilgiler"}), 400
-
     try:
+        data = request.get_json(force=True) or {}
+        email = (data.get("email") or "").strip().lower()
+        password = (data.get("password") or "")
+
+        if not email or not password:
+            return jsonify({"success": False, "message": "Eksik bilgiler"}), 400
+
         with get_db_connection() as conn:
             user = conn.execute(text("""
                 SELECT id, fullname, email, password, role
                 FROM users
-                WHERE email = :email
+                WHERE LOWER(email) = LOWER(:email)
                 LIMIT 1
             """), {"email": email}).fetchone()
 
-        if user and check_password_hash(user[3], password):
-            return jsonify({
-                "success": True,
-                "message": "Giriş başarılı!",
-                "user": {
-                    "id": user[0],
-                    "fullname": user[1],
-                    "email": user[2],
-                    "is_admin": bool(user[4])
-                }
-            })
-        else:
+        if not user or not check_password_hash(user[3], password):
             return jsonify({"success": False, "message": "E-posta veya şifre hatalı!"}), 401
+
+        token = create_mobile_token(user[0])  # ✅ EKLENDİ
+
+        return jsonify({
+            "success": True,
+            "message": "Giriş başarılı!",
+            "token": token,  # ✅ EKLENDİ
+            "user": {
+                "id": user[0],
+                "fullname": user[1],
+                "email": user[2],
+                "is_admin": bool(user[4])
+            }
+        }), 200
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Hata: {e}"}), 500
+
+@app.route("/api/mobile/reports", methods=["GET"])
+@mobile_auth_required(admin_only=True)
+def api_mobile_admin_reports():
+    try:
+        # pagination
+        try:
+            limit = int(request.args.get("limit", 20))
+            offset = int(request.args.get("offset", 0))
+        except ValueError:
+            return jsonify({"success": False, "message": "Geçersiz parametre"}), 400
+
+        limit = max(1, min(limit, 100))
+        offset = max(0, offset)
+
+        q = (request.args.get("q") or "").strip()
+        report_type = (request.args.get("type") or "").strip()
+        date_from = (request.args.get("date_from") or "").strip()
+        date_to = (request.args.get("date_to") or "").strip()
+
+        where_clauses, params = [], {}
+
+        if q:
+            where_clauses.append("LOWER(u.fullname) LIKE LOWER(:q)")
+            params["q"] = f"%{q}%"
+
+        if report_type:
+            where_clauses.append("LOWER(r.type) = LOWER(:rtype)")
+            params["rtype"] = report_type
+
+        if date_from:
+            where_clauses.append("r.date::timestamp >= :dfrom")
+            params["dfrom"] = date_from
+
+        if date_to:
+            where_clauses.append("r.date::timestamp <= :dto")
+            params["dto"] = date_to
+
+        where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+        with get_db_connection() as conn:
+            total_count = conn.execute(
+                text(f"""
+                    SELECT COUNT(*)
+                    FROM reports r
+                    JOIN users u ON r.id = u.id
+                    {where_sql}
+                """),
+                params
+            ).scalar() or 0
+
+            rows = conn.execute(
+                text(f"""
+                    SELECT
+                        r.id as user_id,
+                        r.type,
+                        r.date,
+                        u.fullname AS reporter_name,
+                        r.details,
+                        r.witnesses,
+                        r.department
+                    FROM reports r
+                    JOIN users u ON r.id = u.id
+                    {where_sql}
+                    ORDER BY r.date DESC
+                    LIMIT :limit OFFSET :offset
+                """),
+                {**params, "limit": limit, "offset": offset}
+            ).fetchall()
+
+        items = []
+        for row in rows:
+            raw_date = row[2]
+            date_value = raw_date.isoformat() if isinstance(raw_date, datetime) else (str(raw_date) if raw_date else None)
+            items.append({
+                "user_id": row[0],
+                "type": row[1],
+                "date": date_value,
+                "reporter_name": row[3],
+                "details": row[4],
+                "witnesses": row[5],
+                "department": row[6],
+            })
+
+        has_more = offset + len(items) < total_count
+
+        return jsonify({
+            "success": True,
+            "items": items,
+            "total": total_count,
+            "has_more": has_more,
+            "next_offset": offset + len(items),
+        })
     except Exception as e:
         return jsonify({"success": False, "message": f"Hata: {e}"}), 500
 
