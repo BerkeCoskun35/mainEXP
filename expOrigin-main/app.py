@@ -1052,8 +1052,7 @@ def submit_event_report_mobile():
 @app.route("/api/mobile/profile/password", methods=["POST"])
 def mobile_api_update_password():
     try:
-        payload = request.get_json(silent=True) or {}
-
+        payload = request.get_json(force=True)  # force=True -> JSON parse garanti
         email = (payload.get("email") or "").strip().lower()
         current_password = (payload.get("current_password") or "").strip()
         new_password = (payload.get("new_password") or "").strip()
@@ -1067,7 +1066,7 @@ def mobile_api_update_password():
 
         with db.engine.begin() as conn:
             user = conn.execute(
-                text("SELECT id, password FROM users WHERE LOWER(email)=:e LIMIT 1"),
+                text("SELECT id, password FROM users WHERE email=:e LIMIT 1"),
                 {"e": email}
             ).mappings().first()
 
@@ -1085,6 +1084,7 @@ def mobile_api_update_password():
         return jsonify(success=True, message="Şifre güncellendi."), 200
 
     except Exception as e:
+        # Burada da JSON dönsün
         return jsonify(success=False, message=str(e)), 500
 
 # -----------------------------------------------------
