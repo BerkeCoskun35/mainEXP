@@ -1000,39 +1000,37 @@ def api_mobile_register():
 @app.route('/api/mobile-event-categories', methods=['GET'])
 def get_mobile_event_categories():
     try:
-        conn = get_db_connection()  # SQLAlchemy connection
-        query = text("SELECT type FROM eventcategories ORDER BY id ASC;")
-        result = conn.execute(query)
-
-        categories = [row[0] for row in result.fetchall()]
-        conn.close()
-
-        print("✅ Event categories fetched:", categories)
+        with get_db_connection() as conn:
+            rows = conn.execute(text("SELECT type FROM eventcategories ORDER BY id ASC")).fetchall()
+        categories = [r[0] for r in rows]
         return jsonify({"success": True, "categories": categories}), 200
-
     except Exception as e:
-        import traceback
-        print("❌ ERROR in /api/mobile-event-categories:", e)
-        print(traceback.format_exc())
+        app.logger.exception("ERROR /api/mobile-event-categories")
         return jsonify({"success": False, "message": str(e)}), 500
+
 
 
 @app.route('/api/mobile-event-report', methods=['POST'])
 def submit_event_report_mobile():
     try:
-        data = request.get_json(silent=True) or {}
+        payload = request.get_json(silent=True) or {}
 
-        department = (data.get("department") or "").strip()
-        event_types = data.get("event_types") or []   # list bekliyoruz
-        location = (data.get("location") or "").strip()
-        details = (data.get("details") or "").strip()
-        witnesses = (data.get("witnesses") or "").strip()
+        department = (payload.get("department") or "").strip()
+        event_types = payload.get("event_types") or []   # List bekliyoruz
+        location = (payload.get("location") or "").strip()
+        details = (payload.get("details") or "").strip()
+        witnesses = (payload.get("witnesses") or "").strip()
 
-        # basic validation
-        if (not department or not location or len(details) < 5
-            or not isinstance(event_types, list) or len(event_types) == 0):
-            return jsonify({"success": False, "message": "Eksik veya hatalı alanlar"}), 400
+        if not department:
+            return jsonify({"success": False, "message": "Departman zorunludur."}), 400
+        if not isinstance(event_types, list) or len(event_types) == 0:
+            return jsonify({"success": False, "message": "En az 1 olay türü seçiniz."}), 400
+        if not location:
+            return jsonify({"success": False, "message": "Olay yeri zorunludur."}), 400
+        if not details or len(details) < 5:
+            return jsonify({"success": False, "message": "Detaylar en az 5 karakter olmalıdır."}), 400
 
+        # 🔥 Web tarafının formatıyla aynı "details" stringi
         summary_type = "Olay Bildirim Raporlaması"
         summary_details = (
             f"Departman: {department} | "
@@ -1041,30 +1039,43 @@ def submit_event_report_mobile():
             f"Detaylar: {details}"
         )
 
-        # Mobil login session üretmiyor olabilir, o yüzden user_id yoksa 0 yazıyoruz.
-        # (İstersen Flutter’dan user_id göndertip burada kullanırız)
+        # ⚠️ reports tablosu senin yapında kullanıcı id'yi "id" alanına yazıyor (user_id gibi)
+        # Mobil login token yoksa en azından email ile user id bulalım:
+        email = (payload.get("email") or "").strip().lower()
+        if not email:
+            return jsonify({"success": False, "message": "E-posta zorunludur (mobil rapor için)."}), 400
+
         with db.engine.begin() as conn:
+            user = conn.execute(
+                text("SELECT id, fullname FROM users WHERE LOWER(email)=LOWER(:e) LIMIT 1"),
+                {"e": email}
+            ).mappings().first()
+
+            if not user:
+                return jsonify({"success": False, "message": "Kullanıcı bulunamadı."}), 404
+
             conn.execute(
                 text("""
                     INSERT INTO reports (id, type, date, fullname, details, witnesses, department)
                     VALUES (:uid, :type, :date, :fullname, :details, :witnesses, :department)
                 """),
                 {
-                    "uid": session.get("user_id", 0),
+                    "uid": user["id"],
                     "type": summary_type,
                     "date": datetime.utcnow(),
-                    "fullname": data.get("fullname") or session.get("fullname") or "",
+                    "fullname": user["fullname"] or "",
                     "details": summary_details,
                     "witnesses": witnesses or None,
                     "department": department,
                 }
             )
 
-        return jsonify({"success": True, "message": "Olay başarıyla kaydedildi!"}), 200
+        return jsonify({"success": True, "message": "Olay raporu başarıyla kaydedildi!"}), 200
 
     except Exception as e:
-        app.logger.exception("mobile-event-report error")
+        app.logger.exception("ERROR /api/mobile-event-report")
         return jsonify({"success": False, "message": str(e)}), 500
+
 
 
 
