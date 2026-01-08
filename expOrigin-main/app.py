@@ -475,7 +475,8 @@ def api_reports():
                 text(f"""
                     SELECT COUNT(*)
                     FROM reports r
-                    JOIN users u ON r.id = u.id
+                    LEFT JOIN users u ON r.id = u.id
+
                     {where_sql}
                 """),
                 params
@@ -488,7 +489,7 @@ def api_reports():
                         r.type,
                         r.date,
                         r.fullname,
-                        u.fullname AS reporter_name,
+                        COALESCE(u.fullname, r.fullname) AS reporter_name,
                         r.details,
                         r.witnesses,
                         r.department
