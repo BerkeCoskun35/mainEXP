@@ -1059,35 +1059,33 @@ def mobile_api_update_password():
         new_password = (payload.get("new_password") or "").strip()
 
         if not email:
-            return jsonify({"success": False, "message": "E-posta zorunludur."}), 400
+            return jsonify(success=False, message="E-posta zorunludur."), 400
         if not current_password:
-            return jsonify({"success": False, "message": "Mevcut şifre zorunludur."}), 400
+            return jsonify(success=False, message="Mevcut şifre zorunludur."), 400
         if not new_password or len(new_password) < 6:
-            return jsonify({"success": False, "message": "Yeni şifre en az 6 karakter olmalıdır!"}), 400
+            return jsonify(success=False, message="Yeni şifre en az 6 karakter olmalıdır!"), 400
 
         with db.engine.begin() as conn:
             user = conn.execute(
-                text("SELECT id, password FROM users WHERE email=:e LIMIT 1"),
+                text("SELECT id, password FROM users WHERE LOWER(email)=:e LIMIT 1"),
                 {"e": email}
             ).mappings().first()
 
             if not user:
-                return jsonify({"success": False, "message": "Kullanıcı bulunamadı."}), 404
+                return jsonify(success=False, message="Kullanıcı bulunamadı."), 404
 
             if not check_password_hash(user["password"], current_password):
-                return jsonify({"success": False, "message": "Mevcut şifre yanlış."}), 401
-
-            hashed_password = generate_password_hash(new_password)
+                return jsonify(success=False, message="Mevcut şifre yanlış."), 401
 
             conn.execute(
                 text("UPDATE users SET password=:p WHERE id=:uid"),
-                {"p": hashed_password, "uid": user["id"]}
+                {"p": generate_password_hash(new_password), "uid": user["id"]}
             )
 
-        return jsonify({"success": True, "message": "Şifre güncellendi."}), 200
+        return jsonify(success=True, message="Şifre güncellendi."), 200
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Hata: {e}"}), 500
+        return jsonify(success=False, message=str(e)), 500
 
 # -----------------------------------------------------
 # Araçlar / Debug
