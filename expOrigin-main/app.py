@@ -1049,6 +1049,23 @@ def submit_event_report_mobile():
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+@app.route("/api/mobile/profile/password", methods=["POST"])
+@login_required
+def api_update_password():
+    try:
+        payload = request.get_json(silent=True) or {}
+        new_password = (payload.get("password") or "").strip()
+        if not new_password or len(new_password) < 6:
+            return jsonify({"success": False, "message": "Şifre en az 6 karakter olmalıdır!"}), 400
+
+        hashed_password = generate_password_hash(new_password)
+        with db.engine.begin() as conn:
+            conn.execute(text("UPDATE users SET password=:p WHERE id=:uid"),
+                         {"p": hashed_password, "uid": session["user_id"]})
+        return jsonify({"success": True, "message": "Şifre güncellendi."})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Hata: {e}"}), 500
+
 # -----------------------------------------------------
 # Araçlar / Debug
 # -----------------------------------------------------
