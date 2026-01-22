@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import os
 import re
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from urllib.parse import urlparse, urlunparse
 
 
 # -----------------------------------------------------
@@ -44,23 +45,45 @@ def verify_mobile_token(token: str) -> int | None:
 
 def get_db_url() -> str:
     """
-    Render/Neon için DATABASE_URL zorunlu. (psql '...' formatını da temizler)
-    Dilersen local geliştirme için aşağıya fallback ekleyebilirsin.
+    Render/Neon için DATABASE_URL kullanır.
+    - "psql '...'" formatını temizler
+    - postgres:// -> postgresql:// dönüştürür
+    - Flask-SQLAlchemy için driver ekler (psycopg2)
+    - Neon için sslmode=require ekler
+    - Local fallback sağlar
     """
     env_url = (os.getenv("DATABASE_URL") or "").strip()
+
     if env_url:
+        # "psql '...'" veya "psql \"...\"" gelirse temizle
         if env_url.startswith("psql "):
             env_url = env_url.replace("psql ", "", 1).strip().strip(" '\"")
+
+        # postgres:// -> postgresql://
+        env_url = re.sub(r"^postgres://", "postgresql://", env_url)
+
+        # postgresql:// veya postgresql+driver:// formatını kabul et
         if not re.match(r"^postgresql(\+\w+)?://", env_url):
-            raise RuntimeError("DATABASE_URL geçersiz formatta.")
+            raise RuntimeError("DATABASE_URL geçersiz formatta. postgresql://... olmalı.")
+
+        # Flask-SQLAlchemy (sync) için driver yoksa ekle
+        # (psycopg2 kullanıyorsan)
+        if env_url.startswith("postgresql://"):
+            env_url = env_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
+        # Neon genelde SSL ister
+        if "sslmode=" not in env_url:
+            env_url += ("&" if "?" in env_url else "?") + "sslmode=require"
+
         return env_url
 
-    # İsteğe bağlı local fallback (istersen kaldır):
+    # Local fallback
     local_user = os.getenv("LOCAL_DB_USER", "postgres")
     local_pass = os.getenv("LOCAL_DB_PASS", "1035")
     local_host = os.getenv("LOCAL_DB_HOST", "localhost")
     local_name = os.getenv("LOCAL_DB_NAME", "exp")
-    return f"postgresql://{local_user}:{local_pass}@{local_host}/{local_name}"
+    return f"postgresql+psycopg2://{local_user}:{local_pass}@{local_host}/{local_name}"
+
 
 app.config["SQLALCHEMY_DATABASE_URI"] = get_db_url()
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
