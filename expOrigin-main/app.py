@@ -620,6 +620,7 @@ def submit_risk_report():
     department = request.form.get("department")
     risk_types = request.form.getlist("risk_type[]")
     details = (request.form.get("details") or "").strip()
+    witnesses = (request.form.get("witnesses") or "").strip()  # ✅ EKLENDİ
 
     if not department or not risk_types or len(details) < 5:
         return jsonify({"success": False, "message": "Eksik veya hatalı alanlar"}), 400
@@ -660,7 +661,7 @@ def submit_risk_report():
                     "date": datetime.utcnow(),
                     "fullname": session.get("fullname", ""),
                     "details": summary_details,
-                    "witnesses": None,
+                    "witnesses": witnesses or None,   # ✅ DEĞİŞTİ
                     "department": department,
                 }
             )
