@@ -315,6 +315,8 @@
                 });
                 fd.append('location', location);
                 fd.append('details', details);
+                //22.01.2026
+                witnesses = document.getElementById('witnesses').value.trim();
                 fd.append('witnesses', witnesses);
                 files.forEach((file) => fd.append('images[]', file));
 

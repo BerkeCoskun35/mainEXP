@@ -303,6 +303,9 @@
                     fd.append('risk_type[]', riskType.value);
                 });
                 fd.append('details', details);
+                //22.01.2026
+                const witnesses = document.getElementById('witnesses').value.trim();
+                fd.append('witnesses', witnesses);
                 files.forEach((file) => fd.append('images[]', file));
 
                 try {
